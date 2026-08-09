@@ -1,0 +1,22 @@
+# Environment
+.env
+
+# Vector store
+chroma_db/
+
+# Uploaded documents (may contain personal data)
+data/
+*.pdf
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
