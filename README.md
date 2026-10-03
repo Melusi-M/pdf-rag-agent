@@ -1,76 +1,185 @@
 # PDF RAG Agent
 
-An agentic RAG (Retrieval-Augmented Generation) application that lets you upload PDF documents and ask questions about them in natural language. Built as part of my ongoing exploration of AI agent development — moving beyond simple prompt-in/answer-out pipelines toward agents that reason, use tools, and decide for themselves how to find an answer.
+An agentic Retrieval-Augmented Generation application for asking grounded
+questions about PDF documents.
 
-## What makes it agentic?
+The application extracts and chunks PDF text, creates local embeddings, stores
+them in ChromaDB, and gives a Claude-powered LangChain agent tools for semantic
+search and safe arithmetic. Answers are grounded in retrieved document content
+and include document and page references.
 
-Instead of a fixed retrieve-then-answer pipeline, the LLM is given **tools** and decides how to use them:
+## Features
 
-- **`search_documents`** — semantic search over the ingested PDF chunks. The agent will reformulate its query and search multiple times if the first results are inconclusive (e.g. a lease that says "terminates on the date in item 1.24" sends the agent hunting for the schedule that defines item 1.24).
-- **`calculator`** — safe arithmetic for calculations based on figures found in documents.
-
-The agent is instructed to always ground its answers in retrieved evidence, cite document names and page numbers, and admit when the documents genuinely don't contain the answer.
+- Upload and index PDF documents through Streamlit
+- Extract PDF text while preserving page metadata
+- Split documents into overlapping semantic-search chunks
+- Generate local embeddings with `all-MiniLM-L6-v2`
+- Persist vectors locally with ChromaDB
+- Restrict retrieval to the active document
+- Optionally search across all indexed documents
+- Detect duplicate uploads using SHA-256 document identifiers
+- Filter weak retrieval results using vector distance
+- Maintain chat history within the Streamlit session
+- Perform arithmetic through a restricted AST-based calculator
+- Cite retrieved document names and page numbers
+- Defend against instructions embedded inside untrusted documents
+- Run deterministic tests without paid API requests
 
 ## Architecture
 
-```
-┌────────────┐    ┌─────────────────────┐    ┌──────────────┐
-│ Streamlit  │───▶│ Ingestion            │───▶│ ChromaDB     │
-│ (app.py)   │    │ PyPDF → split →      │    │ (persistent  │
-│            │    │ embed (MiniLM-L6-v2) │    │ vector store)│
-└─────┬──────┘    └─────────────────────┘    └──────▲───────┘
-      │                                             │
-      │           ┌─────────────────────┐    ┌──────┴───────┐
-      └──────────▶│ LangChain agent      │───▶│ Tools:       │
-                  │ (Claude)             │    │ search_docs, │
-                  │ reason → act → loop  │    │ calculator   │
-                  └─────────────────────┘    └──────────────┘
+```mermaid
+flowchart TD
+    UI["Streamlit interface"] --> Upload["Upload validation"]
+    Upload --> Ingest["PDF extraction and chunking"]
+    Ingest --> Store["ChromaDB vector store"]
+    UI --> Agent["LangChain agent"]
+    Agent --> Search["Document search tool"]
+    Agent --> Calc["Safe calculator"]
+    Search --> Store
 ```
 
-- **Ingestion** (`ingest.py`) — loads PDFs with PyPDF, splits into overlapping chunks with `RecursiveCharacterTextSplitter` (1500 chars, 250 overlap), embeds with `all-MiniLM-L6-v2`, and stores in a persistent ChromaDB collection. Deterministic chunk IDs make re-ingestion idempotent.
-- **Tools** (`tools.py`) — the document search and calculator tools exposed to the agent. Embedding model and vector store are cached so they load once per process, not once per query.
-- **Agent** (`agent.py`) — a LangChain agent powered by Claude, with a system prompt tuned to search before answering and to cite sources.
-- **UI** (`app.py`) — Streamlit interface with upload, ingestion status, and chat. A sidebar indicator shows how many chunks are indexed so you always know whether the store is ready.
+## Project structure
 
-## Setup
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate        # Windows
-pip install -r requirements.txt
+```text
+pdf-rag-agent/
+├── .github/workflows/tests.yml
+├── .streamlit/config.toml
+├── scripts/
+│   └── manual_search.py
+├── src/pdf_rag_agent/
+│   ├── __init__.py
+│   ├── agent.py
+│   ├── app.py
+│   ├── arithmetic.py
+│   ├── config.py
+│   ├── ingest.py
+│   ├── tools.py
+│   └── uploads.py
+├── tests/
+├── .env.example
+├── .gitignore
+├── pyproject.toml
+└── uv.lock
 ```
 
-Create a `.env` file:
+## How it works
 
+1. A PDF upload is validated for file type, size, and PDF signature.
+2. The file content is hashed to create a stable document identifier.
+3. Text is extracted page by page with PyPDF.
+4. Text is divided into overlapping chunks.
+5. Chunk embeddings are stored in a persistent ChromaDB collection.
+6. The agent searches either the active PDF or the complete index.
+7. Retrieved chunks are filtered using vector distance.
+8. Claude answers using the retrieved evidence and cites its source pages.
+9. Arithmetic questions are delegated to a restricted calculator tool.
+
+## Requirements
+
+- Python 3.12
+- [uv](https://docs.astral.sh/uv/)
+- An Anthropic API key
+- Internet access during the initial embedding-model download
+
+## Installation
+
+Clone the repository:
+
+```powershell
+git clone https://github.com/Melusi-M/pdf-rag-agent.git
+cd pdf-rag-agent
 ```
-ANTHROPIC_API_KEY=your-key-here
-CLAUDE_MODEL=claude-haiku-4-5-20251001
+
+Install the locked dependencies:
+
+```powershell
+uv sync --locked --dev
 ```
 
-## Run
+Create your local environment file:
 
-```bash
-streamlit run app.py
+```powershell
+Copy-Item .env.example .env
 ```
 
-1. Upload a PDF and click **Process PDF**.
-2. Ask questions in the chat — e.g. *"When does the lease expire?"* or *"What is the monthly rent, and what does it total over the initial period?"*
+Update `.env` with your credentials and supported model:
 
-You can also test retrieval directly from the command line:
-
-```bash
-python test_search.py
+```dotenv
+ANTHROPIC_API_KEY=replace-with-your-api-key
+CLAUDE_MODEL=replace-with-a-supported-model
 ```
 
-## Lessons learned along the way
+Never commit the populated `.env` file.
 
-- **Prompt the agent to search first.** An agent with a search tool will still sometimes ask the user clarifying questions instead of using the tool. Making the system prompt explicit — *search first, retry with varied queries, only then say you don't know* — fixed this.
-- **Cache your embedding model.** Recreating the embedding model per tool call meant reloading model weights on every search. Caching it cut multi-search questions from painfully slow to instant.
-- **Chunk overlap matters for legal documents.** Cross-references ("the date set out in item 1.24") span sections, so generous overlap plus an agent willing to re-search beats trying to get the perfect chunk size.
+## Running the application
+
+```powershell
+uv run streamlit run .\src\pdf_rag_agent\app.py
+```
+
+Then:
+
+1. Upload a PDF.
+2. Select **Process PDF**.
+3. Ask questions about the active document.
+4. Enable **Search all indexed documents** when cross-document retrieval is
+   required.
+
+Uploaded PDFs and the local ChromaDB index are deliberately excluded from Git.
+
+## Manual retrieval test
+
+To inspect raw semantic-search results without invoking Claude:
+
+```powershell
+uv run python .\scripts\manual_search.py
+```
+
+## Running tests
+
+```powershell
+uv run pytest -v
+```
+
+Tests use fakes and mocks where appropriate and do not make paid Anthropic API
+requests.
+
+GitHub Actions also runs the test suite for pushes and pull requests targeting
+`main`.
+
+## Security and privacy
+
+- API credentials are loaded from `.env`, which is ignored by Git.
+- Uploaded PDFs are stored only in the ignored local `data/` directory.
+- ChromaDB data is stored only in the ignored local `chroma_db/` directory.
+- PDF files are excluded from Git by default.
+- Upload filenames are sanitized before storage.
+- File content is validated before ingestion.
+- Arithmetic expressions are parsed with Python's AST rather than `eval`.
+- Retrieved document text is treated as untrusted data, not agent instructions.
+
+This project is intended as a learning and portfolio project. Do not use its
+answers as legal, financial, medical, or other professional advice.
+
+## Known limitations
+
+- Image-only and scanned PDFs require OCR, which is not currently implemented.
+- Retrieval quality depends on the embedding model, chunking strategy, and
+  document extraction quality.
+- ChromaDB is local and does not provide multi-user isolation.
+- Conversation history lasts only for the current Streamlit session.
+- Uploaded documents cannot yet be managed or deleted through the interface.
+- Answer quality still depends on the configured Claude model.
 
 ## Roadmap
 
-- [ ] Multi-document management (list, delete, re-index)
-- [ ] Conversation memory across chat turns
-- [ ] Streaming responses in the UI
-- [ ] Evaluation harness for retrieval quality
+- Add OCR support for scanned documents
+- Add document listing and deletion
+- Add automated retrieval-quality evaluations
+- Add reranking for improved retrieval precision
+- Add streaming model responses
+- Add configurable collection and embedding settings
+
+## License
+
+This project is licensed under the MIT License.

@@ -1,22 +1,38 @@
-# Environment
+# Secrets
 .env
+.env.*
+!.env.example
 
-# Vector store
-chroma_db/
-
-# Uploaded documents (may contain personal data)
+# Uploaded and generated data
 data/
+chroma_db/
 *.pdf
 
-# Python
-__pycache__/
-*.pyc
+# Python environments
 .venv/
 venv/
-.pytest_cache/
 
-# OS / editor
-.DS_Store
+# Python build and cache files
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type checking and linting
+.mypy_cache/
+.ruff_cache/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Editors and operating systems
 .vscode/
 .idea/
-
+.DS_Store
+Thumbs.db

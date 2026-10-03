@@ -1,0 +1,56 @@
+[project]
+name = "pdf-rag-agent"
+version = "0.1.0"
+description = "Agentic PDF question-answering application with semantic retrieval, tool use, citations, and a Streamlit interface."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [
+    { name = "Malusi Mncwango" },
+]
+keywords = [
+    "rag",
+    "pdf",
+    "langchain",
+    "chromadb",
+    "streamlit",
+    "anthropic",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "chromadb>=1.5.9",
+    "langchain>=1.4.3",
+    "langchain-anthropic>=1.7.5",
+    "langchain-chroma>=1.1.0",
+    "langchain-core>=1.2.0",
+    "langchain-huggingface>=1.2.2",
+    "langchain-text-splitters>=1.1.2",
+    "pypdf>=6.19.0",
+    "python-dotenv>=1.2.4",
+    "sentence-transformers>=6.1.0",
+    "streamlit>=1.64.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.20,<0.13"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+
+[project.urls]
+Repository = "https://github.com/Melusi-M/pdf-rag-agent"
+Issues = "https://github.com/Melusi-M/pdf-rag-agent/issues"
